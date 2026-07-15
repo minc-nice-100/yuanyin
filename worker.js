@@ -136,35 +136,36 @@ async function callLLM(env, systemPrompt, userText) {
 
 export default {
   async fetch(request, env) {
-    if (request.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405 });
+    const url = new URL(request.url);
+
+    // API 路由
+    if (request.method === 'POST' && (url.pathname === '/voice' || url.pathname === '/bot')) {
+      try {
+        const body = await request.json();
+
+        if (url.pathname === '/voice') {
+          const { userText, gameState } = body;
+          if (!userText || !gameState) {
+            return Response.json({ error: 'Missing userText or gameState' }, { status: 400 });
+          }
+          return await callLLM(env, buildVoicePrompt(gameState), userText);
+        }
+
+        if (url.pathname === '/bot') {
+          const { gameState, playerIndex } = body;
+          if (!gameState || playerIndex == null) {
+            return Response.json({ error: 'Missing gameState or playerIndex' }, { status: 400 });
+          }
+          const prompt = buildBotPrompt(gameState, playerIndex);
+          if (!prompt) return Response.json({ action: 'pass' });
+          return await callLLM(env, prompt, '请决定');
+        }
+      } catch (err) {
+        return Response.json({ error: err.message }, { status: 500 });
+      }
     }
 
-    try {
-      const url = new URL(request.url);
-      const body = await request.json();
-
-      if (url.pathname === '/voice') {
-        const { userText, gameState } = body;
-        if (!userText || !gameState) {
-          return Response.json({ error: 'Missing userText or gameState' }, { status: 400 });
-        }
-        return await callLLM(env, buildVoicePrompt(gameState), userText);
-      }
-
-      if (url.pathname === '/bot') {
-        const { gameState, playerIndex } = body;
-        if (!gameState || playerIndex == null) {
-          return Response.json({ error: 'Missing gameState or playerIndex' }, { status: 400 });
-        }
-        const prompt = buildBotPrompt(gameState, playerIndex);
-        if (!prompt) return Response.json({ action: 'pass' });
-        return await callLLM(env, prompt, '请决定');
-      }
-
-      return Response.json({ error: 'Unknown endpoint' }, { status: 404 });
-    } catch (err) {
-      return Response.json({ error: err.message }, { status: 500 });
-    }
+    // 静态资源
+    return env.ASSETS.fetch(request);
   },
 };

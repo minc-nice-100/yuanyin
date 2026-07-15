@@ -1,0 +1,10 @@
+name = "yuanyin"
+main = "worker.js"
+compatibility_date = "2025-07-15"
+
+[assets]
+directory = "dist/"
+binding = "ASSETS"
+
+[vars]
+LLM_MODEL = "deepseek-chat"
