@@ -1,6 +1,6 @@
 // ===== 原音麻将 — 语音识别集成 (全流程语音 + SSE) =====
 import { FUNASR_URL, LLM_WORKER_URL } from './config.js';
-import { configureLLM, parseCommandSSE } from './llm-service.js';
+import { configureLLM, parseCommandStream } from './llm-service.js';
 import { sichuanRules } from './rules/sichuan-rules.js';
 
 let listening = $state(false);
@@ -70,11 +70,17 @@ export function createVoice(engine, ui) {
       state.selfActions = sichuanRules.getSelfActions(p.hand, p.exposed, p.queSuit);
       state.tileTypes = sichuanRules.tileTypes;
 
-      // SSE 流式调用 LLM
-      const action = await parseCommandSSE(text, state, (delta) => {
-        // 可选的流式更新回调
+      // SSE 流式，action 一到就立即执行
+      let dispatched = false;
+      const action = await parseCommandStream(text, state, (action) => {
+        if (!dispatched && action.action !== 'unknown') {
+          dispatched = true;
+          dispatchAction(action);
+        }
       });
-      dispatchAction(action);
+      if (!dispatched && action.action !== 'unknown') {
+        dispatchAction(action);
+      }
     } catch (err) {
       console.warn('LLM failed:', err);
       handleKeywordFallback(text);

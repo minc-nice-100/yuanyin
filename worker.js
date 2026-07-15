@@ -176,12 +176,14 @@ export default {
 
         const stream = await callLLMStream(env, buildVoicePrompt(gameState), userText);
 
-        // 转发 LLM SSE 流，累积 JSON 完成后发送最终结果
+        // 转发 LLM SSE 流，一旦 action 字段完整就立即发送
         const { readable, writable } = new TransformStream();
         const writer = writable.getWriter();
         const reader = stream.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        let content = '';
+        let sent = false;
 
         (async () => {
           try {
@@ -194,24 +196,39 @@ export default {
               buffer = lines.pop() || '';
 
               for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6);
-                  if (data === '[DONE]') continue;
-                  try {
-                    const chunk = JSON.parse(data);
-                    const content = chunk.choices?.[0]?.delta?.content || '';
-                    if (content) {
-                      // 尝试提取完整 JSON
-                      const jsonMatch = content.match(/\{[\s\S]*\}/);
-                      if (jsonMatch) {
-                        try {
-                          const action = JSON.parse(jsonMatch[0]);
-                          await writer.write(new TextEncoder().encode(`data: ${JSON.stringify(action)}\n\n`));
-                        } catch {}
+                if (!line.startsWith('data: ')) continue;
+                const data = line.slice(6);
+                if (data === '[DONE]') continue;
+                try {
+                  const chunk = JSON.parse(data);
+                  content += chunk.choices?.[0]?.delta?.content || '';
+
+                  if (!sent) {
+                    // 尝试提取 action 字段
+                    const actMatch = content.match(/"action"\s*:\s*"(\w+)"/);
+                    if (actMatch) {
+                      const action = { action: actMatch[1] };
+                      // 如果是 discard，尝试提取 tile
+                      if (action.action === 'discard') {
+                        const tileMatch = content.match(/"tile"\s*:\s*"(\w+)"/);
+                        if (tileMatch) action.tile = tileMatch[1];
+                        else continue; // 还没拿到 tile，继续等
                       }
+                      sent = true;
+                      await writer.write(new TextEncoder().encode(`data: ${JSON.stringify(action)}\n\n`));
                     }
-                  } catch {}
-                }
+                  }
+                } catch {}
+              }
+            }
+            // 流结束，如果还没发过，尝试完整解析
+            if (!sent) {
+              const jsonMatch = content.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                try {
+                  const action = JSON.parse(jsonMatch[0]);
+                  await writer.write(new TextEncoder().encode(`data: ${JSON.stringify(action)}\n\n`));
+                } catch {}
               }
             }
             await writer.write(new TextEncoder().encode('data: [DONE]\n\n'));
