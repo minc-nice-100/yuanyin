@@ -157,8 +157,8 @@ class NativeSpeechClient {
     if (SpeechRecognition) {
       this.recognition = new SpeechRecognition();
       this.recognition.lang = 'zh-CN';
-      this.recognition.continuous = false;
-      this.recognition.interimResults = false;
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
 
       this.recognition.onstart = () => {
         this.isRecording = true;
@@ -166,8 +166,11 @@ class NativeSpeechClient {
       };
 
       this.recognition.onresult = (e) => {
-        const text = e.results[0][0].transcript.trim();
-        if (this.onResult) this.onResult(text, true);
+        // 取最后一个结果
+        const last = e.results[e.results.length - 1];
+        const text = last[0].transcript.trim();
+        const isFinal = last.isFinal;
+        if (this.onResult) this.onResult(text, isFinal);
       };
 
       this.recognition.onerror = (e) => {

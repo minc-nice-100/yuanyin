@@ -1,18 +1,15 @@
-// ===== 原音麻将 — 语音识别集成 (LLM 语义出牌) =====
+// ===== 原音麻将 — 语音识别集成 (全流程语音 + SSE) =====
 import { FUNASR_URL, LLM_WORKER_URL } from './config.js';
-import { configureLLM, parseCommand } from './llm-service.js';
+import { configureLLM, parseCommandSSE } from './llm-service.js';
 import { sichuanRules } from './rules/sichuan-rules.js';
+
+let listening = $state(false);
+let hintText = $state('点击开始语音');
 
 if (LLM_WORKER_URL) {
   configureLLM({ workerUrl: LLM_WORKER_URL });
 }
 
-/**
- * 创建语音识别控制器
- * @param {Object} engine - 游戏引擎实例
- * @param {Object} ui - UI 功能
- * @returns {Object} 语音 API
- */
 export function createVoice(engine, ui) {
   let asrClient = null;
   let useNativeFallback = false;
@@ -26,22 +23,21 @@ export function createVoice(engine, ui) {
       }
 
       asrClient.onConnect = () => {
+        listening = true;
+        hintText = '正在听...';
         document.getElementById('voice-btn')?.classList.add('recording');
-        const hint = document.querySelector('.voice-hint');
-        if (hint) hint.textContent = '正在听...';
-        const typeStr = useNativeFallback ? '内置' : 'FunASR';
-        ui.showToast(`${typeStr}语音连接成功，请说话`);
+        ui.showToast(`${useNativeFallback ? '内置' : 'FunASR'}语音已开启`);
       };
 
       asrClient.onDisconnect = () => {
+        listening = false;
+        hintText = '点击开始语音';
         document.getElementById('voice-btn')?.classList.remove('recording');
-        const hint = document.querySelector('.voice-hint');
-        if (hint) hint.textContent = '按住说话并出牌';
       };
 
       asrClient.onError = (err) => {
         if (!useNativeFallback && err.includes('连接失败')) {
-          ui.showToast('FunASR连接失败，正在为您切换为浏览器内置语音...');
+          ui.showToast('FunASR连接失败，切换为浏览器内置语音...');
           useNativeFallback = true;
           if (asrClient) { asrClient.stop(); asrClient = null; }
           setTimeout(() => start(), 800);
@@ -51,10 +47,9 @@ export function createVoice(engine, ui) {
       };
 
       asrClient.onResult = (text, isFinal) => {
-        if (text) {
+        if (text && isFinal) {
           ui.showToast(`识别: ${text}`);
           handleVoiceCommand(text);
-          if (isFinal) asrClient.stop();
         }
       };
     }
@@ -64,23 +59,24 @@ export function createVoice(engine, ui) {
   async function handleVoiceCommand(text) {
     const phase = engine.getPhase();
 
-    // 全局指令
     if (text.includes('开始') && phase === 'idle') {
       window.dispatchEvent(new CustomEvent('voice-start-game'));
       return;
     }
 
-    // 使用 LLM 解析语义
     try {
       const state = engine.getState();
       const p = state.players[0];
       state.selfActions = sichuanRules.getSelfActions(p.hand, p.exposed, p.queSuit);
       state.tileTypes = sichuanRules.tileTypes;
 
-      const action = await parseCommand(text, state);
+      // SSE 流式调用 LLM
+      const action = await parseCommandSSE(text, state, (delta) => {
+        // 可选的流式更新回调
+      });
       dispatchAction(action);
     } catch (err) {
-      console.warn('LLM parse failed, falling back:', err);
+      console.warn('LLM failed:', err);
       handleKeywordFallback(text);
     }
   }
@@ -95,7 +91,7 @@ export function createVoice(engine, ui) {
             detail: { action: 'discard', tileIndex: idx },
           }));
         } else {
-          ui.showToast(`手中没有这张牌`);
+          ui.showToast('手中没有这张牌');
         }
         break;
       }
@@ -117,9 +113,7 @@ export function createVoice(engine, ui) {
   }
 
   function handleKeywordFallback(text) {
-    const state = engine.getState();
     const phase = engine.getPhase();
-
     if (phase === 'waiting') {
       if (text.includes('碰')) { dispatchAction({ action: 'peng' }); return; }
       if (text.includes('杠')) { dispatchAction({ action: 'gang' }); return; }
@@ -148,5 +142,10 @@ export function createVoice(engine, ui) {
     }
   }
 
-  return { start, init: initVoiceRecognition };
+  return {
+    start,
+    init: initVoiceRecognition,
+    get listening() { return listening; },
+    get hintText() { return hintText; },
+  };
 }

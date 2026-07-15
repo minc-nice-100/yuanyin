@@ -134,9 +134,101 @@ async function callLLM(env, systemPrompt, userText) {
   }
 }
 
+async function callLLMStream(env, systemPrompt, userText) {
+  const resp = await fetch(env.LLM_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${env.LLM_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: env.LLM_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userText },
+      ],
+      max_tokens: 100,
+      temperature: 0,
+      stream: true,
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`LLM ${resp.status}: ${errText}`);
+  }
+
+  return resp.body;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // SSE 流式语音
+    if (request.method === 'POST' && url.pathname === '/voice/stream') {
+      try {
+        const { userText, gameState } = await request.json();
+        if (!userText || !gameState) {
+          return new Response('Missing userText or gameState', { status: 400 });
+        }
+
+        const stream = await callLLMStream(env, buildVoicePrompt(gameState), userText);
+
+        // 转发 LLM SSE 流，累积 JSON 完成后发送最终结果
+        const { readable, writable } = new TransformStream();
+        const writer = writable.getWriter();
+        const reader = stream.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        (async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]') continue;
+                  try {
+                    const chunk = JSON.parse(data);
+                    const content = chunk.choices?.[0]?.delta?.content || '';
+                    if (content) {
+                      // 尝试提取完整 JSON
+                      const jsonMatch = content.match(/\{[\s\S]*\}/);
+                      if (jsonMatch) {
+                        try {
+                          const action = JSON.parse(jsonMatch[0]);
+                          await writer.write(new TextEncoder().encode(`data: ${JSON.stringify(action)}\n\n`));
+                        } catch {}
+                      }
+                    }
+                  } catch {}
+                }
+              }
+            }
+            await writer.write(new TextEncoder().encode('data: [DONE]\n\n'));
+          } catch (err) {
+            await writer.write(new TextEncoder().encode(`data: ${JSON.stringify({error: err.message})}\n\n`));
+          } finally {
+            await writer.close();
+          }
+        })();
+
+        return new Response(readable, {
+          headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        });
+      } catch (err) {
+        return Response.json({ error: err.message }, { status: 500 });
+      }
+    }
 
     // API 路由
     if (request.method === 'POST' && (url.pathname === '/voice' || url.pathname === '/bot')) {

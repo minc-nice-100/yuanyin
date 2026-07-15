@@ -1,19 +1,21 @@
 <script>
   let { store } = $props();
+  let recording = $state(false);
 
   function handleVoice() {
     if (!store.voice) {
       store.initVoice({
-        showToast: (msg, duration) => store.showToast(msg),
+        showToast: (msg) => store.showToast(msg),
       });
     }
     store.voice.start();
+    recording = !recording;
   }
 </script>
 
 <div class="voice-area" id="voice-area">
-  <p class="voice-hint">按住说话并出牌</p>
-  <button class="voice-btn" id="voice-btn" onclick={handleVoice} aria-label="语音输入">
+  <p class="voice-hint">{recording ? '正在听...' : '点击开始语音'}</p>
+  <button class="voice-btn" id="voice-btn" class:recording={recording} onclick={handleVoice} aria-label="语音输入">
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
   </button>
 </div>
