@@ -1,0 +1,6 @@
+name = "yuanyin-llm"
+main = "worker.js"
+compatibility_date = "2025-07-15"
+
+[vars]
+LLM_MODEL = "deepseek-chat"
