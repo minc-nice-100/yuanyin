@@ -40,9 +40,10 @@ function buildVoicePrompt(state, playerIndex = 0) {
 - "一筒/1筒" → tile="1b", 二筒→"2b", 三筒→"3b", 四筒→"4b", 五筒→"5b", 六筒→"6b", 七筒→"7b", 八筒→"8b", 九筒→"9b"
 
 规则:
-1. 玩家说牌名（如"打三万""出五筒""七条"）→ 返回 {"action":"discard","tile":"牌ID"}，tile 按映射规则填
+1. 玩家说牌名 → 返回 {"action":"discard","tile":"牌ID"}，tile 按映射规则填
 2. 玩家说"碰/杠/胡/过/不要" → 返回对应操作
-3. 完全无法理解才返回 {"action":"unknown"}
+3. 语音识别可能有同音错字（如"三碗"=三万、"五跳"=五条、"一同"=一筒），请根据发音推测正确牌名
+4. 完全无法理解才返回 {"action":"unknown"}
 
 JSON 示例:
 {"action":"discard","tile":"3w"}
@@ -175,7 +176,7 @@ export default {
             return Response.json({ error: 'Missing userText or gameState' }, { status: 400 });
           }
           const prompt = buildVoicePrompt(gameState, 0);
-          const content = await callLLM(env, prompt, userText, { temp: 0, useJson: true });
+          const content = await callLLM(env, prompt, userText, { temp: 0.2, useJson: true });
           const parsed = parseJson(content);
           return Response.json(parsed || { action: 'unknown' });
         }
@@ -195,7 +196,7 @@ export default {
 
           // Step 2: 用 voice 解析器把自然语言转成 JSON 操作
           const voicePrompt = buildVoicePrompt(gameState, playerIndex);
-          const parsed = await callLLM(env, voicePrompt, naturalSpeech, { temp: 0, useJson: true });
+          const parsed = await callLLM(env, voicePrompt, naturalSpeech, { temp: 0.2, useJson: true });
           const action = parseJson(parsed);
           return Response.json(action || { action: 'unknown' });
         }
