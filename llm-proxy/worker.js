@@ -35,21 +35,30 @@ function buildVoicePrompt(state) {
     discardInfo = `\n- ${state.players[state.pendingAction.from].name}打出了${td.char}${td.sub}(${state.pendingAction.tile})`;
   }
 
-  return `你是麻将游戏助手。根据用户的口语输入和当前游戏状态，判断用户想执行的操作并返回JSON。
+  return `你是麻将语音助手。用户用口语说牌名或操作，你需要解析成游戏指令。
 
-当前游戏状态:
-- 手牌: ${handDisplay} (共${p.hand.length}张)
-- 缺门: ${p.queSuit ? {w:'萬',t:'條',b:'筒'}[p.queSuit] : '无'}
-- 阶段: ${state.phase === 'playing' ? '你的回合，请出牌' : '等待响应'}
-- 可操作: ${available.join('、') || '无'}${discardInfo}
+牌名映射规则（必须严格遵守）:
+- "一万/一萬/1万" → tile="1w", "二万/二萬/2万" → tile="2w", 以此类推到"九万/九萬/9万" → tile="9w"
+- "一条/一條/1条" → tile="1t", "二条/二條/2条" → tile="2t", 以此类推到"九条/九條/9条" → tile="9t"
+- "一筒/1筒" → tile="1b", "二筒/2筒" → tile="2b", 以此类推到"九筒/9筒" → tile="9b"
 
-返回JSON（只返回JSON）:
-{"action":"discard","tile":"牌ID"}  出牌(tile如"1w""5t""9b")
+当前手牌: ${handDisplay} (共${p.hand.length}张)
+缺门: ${p.queSuit ? {w:'萬',t:'條',b:'筒'}[p.queSuit] : '无'}
+阶段: ${state.phase === 'playing' ? '你的回合，请出牌' : '等待响应'}
+可操作: ${available.join('、') || '无'}${discardInfo}
+
+规则:
+1. 用户说牌名（如"三万""五筒""七条"）→ 必须返回 discard，tile 按映射规则填写，不要管手牌里有没有
+2. 用户说"碰/杠/胡/过" → 返回对应操作
+3. 只有完全无法理解时才返回 unknown
+
+返回JSON（只返回JSON，不要其他内容）:
+{"action":"discard","tile":"牌ID"}  出牌
 {"action":"peng"}  碰
 {"action":"gang"}  杠
 {"action":"hu"}  胡
 {"action":"pass"}  过
-{"action":"unknown"}  无法识别`;
+{"action":"unknown"}  完全无法理解`;
 }
 
 function buildBotPrompt(state, playerIndex) {
