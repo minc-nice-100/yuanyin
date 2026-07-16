@@ -136,11 +136,17 @@ export function createVoice(engine, ui, getASRMode) {
     }
   }
 
-  // 语音 → 牌ID 解析（兼容繁简）
+  // 语音 → 牌ID 解析（兼容繁简 + 麻将俚语）
   const RANK_MAP = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7', '八': '8', '九': '9' };
   const SUIT_MAP = { '万': 'w', '萬': 'w', '条': 't', '條': 't', '筒': 'b' };
+  // 俚语 → 牌ID（如"鸡"=一条）
+  const SLANG_MAP = { '鸡': '1t', '雞': '1t', '幺鸡': '1t', '么鸡': '1t', '幺雞': '1t', '妖姬': '1t' };
 
   function parseTileFromSpeech(text) {
+    // 先匹配俚语
+    for (const [slang, tileId] of Object.entries(SLANG_MAP)) {
+      if (text.includes(slang)) return tileId;
+    }
     // 匹配 "数字+花色" 或 "中文数字+花色"，如 "一万" "一萬" "1万" "3筒" "五条"
     const m = text.match(/([1-9一二三四五六七八九])\s*([万萬条條筒])/);
     if (!m) return null;
