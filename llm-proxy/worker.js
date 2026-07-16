@@ -142,6 +142,7 @@ async function callLLM(env, systemPrompt, userText, temp = 0.8) {
       ],
       max_tokens: 200,
       temperature: temp,
+      response_format: { type: 'json_object' },
     }),
   });
 
@@ -153,15 +154,11 @@ async function callLLM(env, systemPrompt, userText, temp = 0.8) {
   const data = await resp.json();
   const content = data.choices?.[0]?.message?.content || '';
 
-  // 尝试从回复中提取 JSON（兼容 LLM 前后加废话的情况）
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      return Response.json(JSON.parse(jsonMatch[0]));
-    } catch {}
+  try {
+    return Response.json(JSON.parse(content));
+  } catch {
+    return Response.json({ action: 'unknown' });
   }
-
-  return Response.json({ action: 'unknown' });
 }
 
 export default {
