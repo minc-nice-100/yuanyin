@@ -162,7 +162,7 @@ export default {
           if (!thinkBlock) return Response.json({ action: 'pass' });
 
           // Step 1: LLM 自然语言说出决策
-          const naturalSpeech = await callLLM(env, BOT_THINK_SYSTEM, thinkBlock, { temp: 0.8 });
+          const naturalSpeech = await callLLM(env, BOT_THINK_SYSTEM, thinkBlock, { temp: 1.5 });
 
           // Step 2: voice 解析器转 JSON
           const voiceBlock = voiceUserBlock(gameState, playerIndex);

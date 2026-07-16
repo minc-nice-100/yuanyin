@@ -188,7 +188,7 @@ function scheduleAIResponses(pending) {
       if (action.type === 'pass') {
         processActionResult(engine.pass(r.player));
       } else {
-        let result = executeBotAction(r.player, action);
+        let result = executeBotAction(r.player, action, 'waiting');
         // LLM 返回无效操作 → 降级 pass
         if (!result || !result.ok) {
           console.warn(`Bot ${r.player} invalid response, falling back to pass`);
@@ -204,20 +204,26 @@ async function runAITurn(playerIndex) {
   const currentState = engine.getState();
   if (currentState.phase !== 'playing') return;
   let action = await decideAction(playerIndex, currentState);
-  let result = executeBotAction(playerIndex, action);
+  let result = executeBotAction(playerIndex, action, 'playing');
 
-  // LLM 返回无效操作 → 降级启发式
+  // LLM 返回无效操作或不合阶段 → 降级启发式
   if (!result || !result.ok) {
     console.warn(`Bot ${playerIndex} invalid action, falling back to heuristic`);
     action = ai.decideAction(playerIndex, currentState);
-    result = executeBotAction(playerIndex, action);
+    result = executeBotAction(playerIndex, action, 'playing');
   }
   if (result) processActionResult(result);
 }
 
-/** 执行 bot 操作，返回 engine result */
-function executeBotAction(playerIndex, action) {
-  switch (action.type) {
+/** 执行 bot 操作，phase 参数校验合法性（出牌回合不准碰，等待阶段不准出牌） */
+function executeBotAction(playerIndex, action, phase) {
+  const type = action.type;
+  // 自己回合只能 discard / hu（自摸）/ gang（暗杠补杠）
+  if (phase === 'playing' && !['discard','hu','gang'].includes(type)) return null;
+  // 等待响应阶段只能 peng / gang / hu / pass
+  if (phase === 'waiting' && !['peng','gang','hu','pass'].includes(type)) return null;
+
+  switch (type) {
     case 'discard':
       return engine.discard(playerIndex, action.tileIndex);
     case 'peng':
