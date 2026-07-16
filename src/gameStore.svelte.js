@@ -184,17 +184,17 @@ function scheduleAIResponses(pending) {
     setTimeout(async () => {
       const currentState = engine.getState();
       if (currentState.phase !== 'waiting') return;
-      const action = await decideAction(r.player, currentState);
+      let action = await decideAction(r.player, currentState);
       if (action.type === 'pass') {
         processActionResult(engine.pass(r.player));
       } else {
-        let result;
-        switch (action.type) {
-          case 'hu': result = engine.hu(r.player); break;
-          case 'gang': result = engine.gang(r.player); break;
-          case 'peng': result = engine.peng(r.player); break;
+        let result = executeBotAction(r.player, action);
+        // LLM 返回无效操作 → 降级 pass
+        if (!result || !result.ok) {
+          console.warn(`Bot ${r.player} invalid response, falling back to pass`);
+          result = engine.pass(r.player);
         }
-        if (result) processActionResult(result);
+        processActionResult(result);
       }
     }, 300 + i * 200);
   });
@@ -203,25 +203,32 @@ function scheduleAIResponses(pending) {
 async function runAITurn(playerIndex) {
   const currentState = engine.getState();
   if (currentState.phase !== 'playing') return;
-  const action = await decideAction(playerIndex, currentState);
-  let result;
+  let action = await decideAction(playerIndex, currentState);
+  let result = executeBotAction(playerIndex, action);
+
+  // LLM 返回无效操作 → 降级启发式
+  if (!result || !result.ok) {
+    console.warn(`Bot ${playerIndex} invalid action, falling back to heuristic`);
+    action = ai.decideAction(playerIndex, currentState);
+    result = executeBotAction(playerIndex, action);
+  }
+  if (result) processActionResult(result);
+}
+
+/** 执行 bot 操作，返回 engine result */
+function executeBotAction(playerIndex, action) {
   switch (action.type) {
     case 'discard':
-      result = engine.discard(playerIndex, action.tileIndex);
-      break;
+      return engine.discard(playerIndex, action.tileIndex);
     case 'peng':
-      result = engine.peng(playerIndex);
-      break;
+      return engine.peng(playerIndex);
     case 'gang':
-      result = engine.gang(playerIndex);
-      break;
+      return engine.gang(playerIndex);
     case 'hu':
-      result = engine.hu(playerIndex);
-      break;
+      return engine.hu(playerIndex);
     default:
-      return;
+      return null;
   }
-  processActionResult(result);
 }
 
 // ========== 公开 API ==========
