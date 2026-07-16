@@ -258,4 +258,105 @@ class NativeSpeechClient {
   }
 }
 
-window.NativeSpeechClient = NativeSpeechClient;
+/**
+ * Whisper ASR Client (HTTP)
+ * 按下录音，松开发送音频到 whisper-asr 接口，返回识别文本
+ */
+class WhisperASRClient {
+  constructor(url = 'https://www.project-resonance.net/api/whisper-asr') {
+    this.url = url;
+    this.mediaRecorder = null;
+    this.stream = null;
+    this.chunks = [];
+    this.isRecording = false;
+
+    this.onResult = null;
+    this.onError = null;
+    this.onConnect = null;
+    this.onDisconnect = null;
+  }
+
+  async start() {
+    if (this.isRecording) return;
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType: 'audio/webm' });
+      this.chunks = [];
+
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) this.chunks.push(e.data);
+      };
+
+      this.mediaRecorder.onstart = () => {
+        this.isRecording = true;
+        if (this.onConnect) this.onConnect();
+      };
+
+      this.mediaRecorder.onstop = async () => {
+        this.isRecording = false;
+        if (this.onDisconnect) this.onDisconnect();
+
+        const blob = new Blob(this.chunks, { type: 'audio/webm' });
+        if (blob.size === 0) {
+          if (this.onError) this.onError('未检测到语音');
+          return;
+        }
+
+        try {
+          const formData = new FormData();
+          formData.append('file', blob, 'recording.webm');
+
+          const resp = await fetch(this.url, {
+            method: 'POST',
+            body: formData,
+          });
+
+          const data = await resp.json().catch(() => ({}));
+
+          // HTTP 级别炸了
+          if (!resp.ok) {
+            throw new Error(`服务不可用 (${resp.status})`);
+          }
+
+          // API 返回了错误（识别不出）
+          if (data.ok === false) {
+            if (this.onError) this.onError(data.error || '未识别到语音内容');
+            return;
+          }
+
+          // 成功
+          const text = (data.text || '').trim();
+          if (text && this.onResult) {
+            this.onResult(text, true);
+          } else if (this.onError) {
+            this.onError('未识别到语音内容');
+          }
+        } catch (err) {
+          console.error('Whisper ASR error:', err);
+          if (this.onError) this.onError('语音识别服务连接失败');
+        }
+      };
+
+      this.mediaRecorder.onerror = () => {
+        if (this.onError) this.onError('录音失败');
+      };
+
+      this.mediaRecorder.start();
+    } catch (e) {
+      console.error('Failed to get microphone', e);
+      if (this.onError) this.onError('无法获取麦克风权限');
+    }
+  }
+
+  stop() {
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      this.mediaRecorder.stop();
+    }
+    if (this.stream) {
+      this.stream.getTracks().forEach(t => t.stop());
+      this.stream = null;
+    }
+  }
+}
+
+window.WhisperASRClient = WhisperASRClient;

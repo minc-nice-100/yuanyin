@@ -1,18 +1,13 @@
 // ===== 原音麻将 — 语音识别集成 (Push-to-Talk) =====
-// 三级 fallback: FunASR → 浏览器原生语音 → 关键词匹配
-// Push-to-talk 场景优先用原生语音（即时启动），FunASR 作为可选升级
-import { FUNASR_URL, LLM_WORKER_URL } from './config.js';
+// 按下录音 → 松开发送 Whisper ASR → 识别结果 → /voice LLM 解析
+import { ASR_URL, LLM_WORKER_URL } from './config.js';
 import { configureLLM, parseCommand } from './llm-service.js';
 import { sichuanRules } from './rules/sichuan-rules.js';
 
 let voiceOn = false;
 let hintText = '按住说话并出牌';
-let fallbackTimer = null;
 
-// 检查是否配置了真实的 FunASR 服务（非默认 localhost）
-const useFunASRConfigured = FUNASR_URL && !FUNASR_URL.includes('127.0.0.1') && !FUNASR_URL.includes('localhost');
-
-if (LLM_WORKER_URL) {
+if (LLM_WORKER_URL || LLM_WORKER_URL === '') {
   configureLLM({ workerUrl: LLM_WORKER_URL });
 }
 
@@ -22,11 +17,10 @@ export function createVoice(engine, ui, getASRMode) {
 
   function createClient() {
     const mode = getASRMode ? getASRMode() : 'auto';
-    const useFunASR = mode === 'funasr' || (mode === 'auto' && useFunASRConfigured);
-    if (useFunASR) {
-      return new window.FunASRClient(FUNASR_URL);
+    if (mode === 'native') {
+      return new window.NativeSpeechClient();
     }
-    return new window.NativeSpeechClient();
+    return new window.WhisperASRClient(ASR_URL);
   }
 
   function initASR() {
@@ -44,17 +38,7 @@ export function createVoice(engine, ui, getASRMode) {
       };
 
       asrClient.onError = (err) => {
-        const mode = getASRMode ? getASRMode() : 'auto';
-        if (mode !== 'native' && err.includes('连接失败')) {
-          ui.showToast('FunASR连接失败，切换浏览器内置语音...');
-          if (asrClient) { asrClient.stop(); asrClient = null; }
-          clearTimeout(fallbackTimer);
-          fallbackTimer = setTimeout(() => {
-            if (voiceOn) startMic();
-          }, 300);
-        } else {
-          ui.showToast(err);
-        }
+        ui.showToast(err);
       };
 
       asrClient.onResult = (text, isFinal) => {
@@ -200,7 +184,6 @@ export function createVoice(engine, ui, getASRMode) {
         return;
       }
 
-      // 切换 ASR 模式时重建 client
       if (asrClient) { asrClient.stop(); asrClient = null; }
 
       voiceOn = true;
@@ -209,7 +192,6 @@ export function createVoice(engine, ui, getASRMode) {
 
     release() {
       voiceOn = false;
-      clearTimeout(fallbackTimer);
       stopMic();
     },
 

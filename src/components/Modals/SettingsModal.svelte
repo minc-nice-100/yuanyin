@@ -22,8 +22,8 @@
         <div class="toggle-switch" class:on={ttsOn} onclick={() => { ttsOn = !ttsOn; store.toggleTTS(); }}></div>
       </div>
       <div class="modal-option">
-        <span class="modal-option-label">浏览器原生语音</span>
-        <div class="toggle-switch" class:on={store.asrMode !== 'funasr'} onclick={() => store.toggleASR()}></div>
+        <span class="modal-option-label">Whisper 语音识别</span>
+        <div class="toggle-switch" class:on={store.asrMode !== 'native'} onclick={() => store.toggleASR()}></div>
       </div>
       <button class="modal-close-btn" onclick={close}>关闭</button>
     </div>

@@ -1,7 +1,8 @@
 // ===== 原音麻将 — 配置与常量 =====
 
-// --- FunASR 语音识别 WebSocket 地址 ---
-export const FUNASR_URL = new URLSearchParams(window.location.search).get('asr') || 'ws://127.0.0.1:10095/';
+// --- Whisper ASR 地址 ---
+const param = new URLSearchParams(window.location.search);
+export const ASR_URL = param.get('asr') || 'https://www.project-resonance.net/api/whisper-asr';
 
 // --- 音效开关 ---
 export let sfxEnabled = true;
@@ -35,6 +36,5 @@ export const SFX = {
 // --- 快捷短语 ---
 export const QUICK_PHRASES = ['不急慢慢来', '快点出牌', '厉害！', '再想想', '运气好', '下把加油'];
 
-// --- LLM 语义出牌配置（通过 URL 参数 ?llm= 指定）---
-const param = new URLSearchParams(window.location.search);
+// --- LLM 语义出牌配置 ---
 export const LLM_WORKER_URL = param.get('llm') || '';
