@@ -26,11 +26,12 @@ let ttsEnabled = $state(false);
 let quickChatOpen = $state(false);
 let settingsOpen = $state(false);
 let actionPrompt = $state('');
+let asrMode = $state('auto'); // 'auto' | 'native' | 'funasr'
 
 let voice = null;
 
 function initVoice(ui) {
-  voice = createVoice(engine, ui);
+  voice = createVoice(engine, ui, () => asrMode);
 }
 
 function refreshState() {
@@ -254,8 +255,10 @@ export function getStore() {
     },
     showToast,
     initVoice,
+    get asrMode() { return asrMode; },
     toggleTTS() { ttsEnabled = !ttsEnabled; },
     toggleSFX() { sfxEnabled = !sfxEnabled; },
+    toggleASR() { asrMode = asrMode === 'native' ? 'auto' : 'native'; },
     toggleQuickChat() { quickChatOpen = !quickChatOpen; },
     toggleSettings() { settingsOpen = !settingsOpen; },
     hideActionPrompt,

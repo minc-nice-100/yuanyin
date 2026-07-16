@@ -10,17 +10,19 @@ let hintText = '按住说话并出牌';
 let fallbackTimer = null;
 
 // 检查是否配置了真实的 FunASR 服务（非默认 localhost）
-const useFunASR = FUNASR_URL && !FUNASR_URL.includes('127.0.0.1') && !FUNASR_URL.includes('localhost');
+const useFunASRConfigured = FUNASR_URL && !FUNASR_URL.includes('127.0.0.1') && !FUNASR_URL.includes('localhost');
 
 if (LLM_WORKER_URL) {
   configureLLM({ workerUrl: LLM_WORKER_URL });
 }
 
-export function createVoice(engine, ui) {
+export function createVoice(engine, ui, getASRMode) {
   let asrClient = null;
   let isRecording = false;
 
   function createClient() {
+    const mode = getASRMode ? getASRMode() : 'auto';
+    const useFunASR = mode === 'funasr' || (mode === 'auto' && useFunASRConfigured);
     if (useFunASR) {
       return new window.FunASRClient(FUNASR_URL);
     }
@@ -42,7 +44,8 @@ export function createVoice(engine, ui) {
       };
 
       asrClient.onError = (err) => {
-        if (useFunASR && err.includes('连接失败')) {
+        const mode = getASRMode ? getASRMode() : 'auto';
+        if (mode !== 'native' && err.includes('连接失败')) {
           ui.showToast('FunASR连接失败，切换浏览器内置语音...');
           if (asrClient) { asrClient.stop(); asrClient = null; }
           clearTimeout(fallbackTimer);
@@ -196,6 +199,9 @@ export function createVoice(engine, ui) {
         ui.showToast('当前浏览器不支持语音识别');
         return;
       }
+
+      // 切换 ASR 模式时重建 client
+      if (asrClient) { asrClient.stop(); asrClient = null; }
 
       voiceOn = true;
       startMic();
