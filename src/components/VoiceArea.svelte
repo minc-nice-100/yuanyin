@@ -1,9 +1,19 @@
 <script>
   let { store } = $props();
   let pressed = $state(false);
+  let s = $derived(store.state);
+
+  let canAct = $derived(
+    (s.phase === 'playing' && s.currentPlayer === 0) ||
+    (s.phase === 'waiting' && s.pendingAction?.responses?.some(r => r.player === 0))
+  );
 
   function handlePointerDown(e) {
     e.preventDefault();
+    if (!canAct) {
+      store.showToast('还没轮到你呢');
+      return;
+    }
     if (!store.voice) {
       store.initVoice({
         showToast: (msg) => store.showToast(msg),
@@ -32,10 +42,11 @@
 </script>
 
 <div class="voice-area" id="voice-area">
-  <p class="voice-hint">{pressed ? '正在听...' : '按住说话并出牌'}</p>
+  <p class="voice-hint">{pressed ? '正在听...' : (canAct ? '按住说话并出牌' : '等待中...')}</p>
   <button
     class="voice-btn"
     class:pressed
+    class:disabled={!canAct}
     id="voice-btn"
     onpointerdown={handlePointerDown}
     onpointerup={handlePointerUp}

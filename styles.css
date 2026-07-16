@@ -1271,6 +1271,21 @@ html, body {
   flex-shrink: 0;
 }
 
+/* ===== 非自己回合禁用交互 ===== */
+.hand-area.disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.hand-tile.non-interactive {
+  pointer-events: none;
+}
+
+.voice-btn.disabled {
+  pointer-events: none;
+  opacity: 0.4;
+}
+
 /* ===== 缺门标记 (变暗) ===== */
 .hand-tile.que-dim {
   opacity: 0.5;

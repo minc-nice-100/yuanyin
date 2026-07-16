@@ -125,27 +125,24 @@ function hideActionPrompt() {
 // ========== 机器人决策 ==========
 
 async function decideAction(playerIndex, currentState) {
-  // LLM 决策
-  if (LLM_WORKER_URL) {
-    const p = currentState.players[playerIndex];
-    const enriched = { ...currentState };
-    enriched.selfActions = sichuanRules.getSelfActions(p.hand, p.exposed, p.queSuit);
-    enriched.tileTypes = sichuanRules.tileTypes;
+  // 始终尝试 LLM，未配置 URL 时走同域相对路径
+  const p = currentState.players[playerIndex];
+  const enriched = { ...currentState };
+  enriched.selfActions = sichuanRules.getSelfActions(p.hand, p.exposed, p.queSuit);
+  enriched.tileTypes = sichuanRules.tileTypes;
 
-    try {
-      const llmAction = await botDecide(playerIndex, enriched);
-      // 模拟思考
-      await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
-      if (llmAction.action === 'discard' && llmAction.tile) {
-        const idx = currentState.players[playerIndex].hand.indexOf(llmAction.tile);
-        if (idx >= 0) return { type: 'discard', tileIndex: idx };
-      }
-      if (['peng', 'gang', 'hu', 'pass'].includes(llmAction.action)) {
-        return { type: llmAction.action };
-      }
-    } catch (err) {
-      console.warn('LLM bot decide failed, using heuristic:', err);
+  try {
+    const llmAction = await botDecide(playerIndex, enriched);
+    await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
+    if (llmAction.action === 'discard' && llmAction.tile) {
+      const idx = currentState.players[playerIndex].hand.indexOf(llmAction.tile);
+      if (idx >= 0) return { type: 'discard', tileIndex: idx };
     }
+    if (['peng', 'gang', 'hu', 'pass'].includes(llmAction.action)) {
+      return { type: llmAction.action };
+    }
+  } catch (err) {
+    console.warn('LLM bot decide failed, using heuristic:', err);
   }
 
   // 降级: 启发式 AI
