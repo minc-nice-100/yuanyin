@@ -27,6 +27,7 @@ let quickChatOpen = $state(false);
 let settingsOpen = $state(false);
 let actionPrompt = $state('');
 let asrMode = $state('auto'); // 'auto' | 'native' | 'funasr'
+let botThinking = $state(false);
 
 let voice = null;
 
@@ -155,7 +156,9 @@ async function decideAction(playerIndex, currentState) {
   const botState = buildBotState(playerIndex);
 
   try {
+    botThinking = true;
     const llmAction = await botDecide(playerIndex, botState);
+    botThinking = false;
     await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
     if (llmAction.action === 'discard' && llmAction.tile) {
       const idx = currentState.players[playerIndex].hand.indexOf(llmAction.tile);
@@ -165,6 +168,7 @@ async function decideAction(playerIndex, currentState) {
       return { type: llmAction.action };
     }
   } catch (err) {
+    botThinking = false;
     console.warn('LLM bot decide failed, using heuristic:', err);
   }
 
@@ -233,6 +237,7 @@ export function getStore() {
     get quickChatOpen() { return quickChatOpen; },
     get settingsOpen() { return settingsOpen; },
     get actionPrompt() { return actionPrompt; },
+    get botThinking() { return botThinking; },
 
     get engine() { return engine; },
     get ai() { return ai; },
