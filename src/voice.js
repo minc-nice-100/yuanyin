@@ -183,10 +183,14 @@ export function createVoice(engine, ui, getASRMode) {
 
   return {
     press() {
-      const hasSpeechAPI = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-      if (!hasSpeechAPI) {
-        ui.showToast('当前浏览器不支持语音识别');
-        return;
+      // Whisper 模式不需要 SpeechRecognition，只对 native 模式检查
+      const mode = getASRMode ? getASRMode() : 'auto';
+      if (mode === 'native') {
+        const hasSpeechAPI = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+        if (!hasSpeechAPI) {
+          ui.showToast('当前浏览器不支持语音识别');
+          return;
+        }
       }
 
       if (asrClient) { asrClient.stop(); asrClient = null; }

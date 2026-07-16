@@ -124,15 +124,38 @@ function hideActionPrompt() {
 
 // ========== 机器人决策 ==========
 
+/** 构建只含该 AI 玩家可见信息的 state（不暴露其他玩家手牌） */
+function buildBotState(playerIndex) {
+  const full = engine.getState();
+  const R = sichuanRules;
+  const p = full.players[playerIndex];
+  return {
+    phase: full.phase,
+    wallLength: full.wall.length,
+    currentPlayer: full.currentPlayer,
+    lastDiscard: full.lastDiscard,
+    pendingAction: full.pendingAction,
+    // 只暴露：己方完整信息 + 其他玩家的已亮牌
+    players: full.players.map((pl, i) => ({
+      name: pl.name,
+      hand: i === playerIndex ? pl.hand : [], // 只传自己的手牌
+      handCount: pl.hand.length,                // 别人只给张数
+      exposed: pl.exposed,
+      discards: pl.discards,
+      queSuit: pl.queSuit,
+      isHuman: pl.isHuman,
+    })),
+    // 该玩家的可用操作
+    selfActions: R.getSelfActions(p.hand, p.exposed, p.queSuit),
+    tileTypes: R.tileTypes,
+  };
+}
+
 async function decideAction(playerIndex, currentState) {
-  // 始终尝试 LLM，未配置 URL 时走同域相对路径
-  const p = currentState.players[playerIndex];
-  const enriched = { ...currentState };
-  enriched.selfActions = sichuanRules.getSelfActions(p.hand, p.exposed, p.queSuit);
-  enriched.tileTypes = sichuanRules.tileTypes;
+  const botState = buildBotState(playerIndex);
 
   try {
-    const llmAction = await botDecide(playerIndex, enriched);
+    const llmAction = await botDecide(playerIndex, botState);
     await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
     if (llmAction.action === 'discard' && llmAction.tile) {
       const idx = currentState.players[playerIndex].hand.indexOf(llmAction.tile);

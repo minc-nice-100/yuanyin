@@ -1,32 +1,72 @@
-/**
- * FunASR WebSocket Client
- * Captures microphone audio, resamples to 16kHz, and streams to a FunASR server.
- */
+// ===== ASR Clients =====
+// WhisperASRClient: HTTP upload via MediaRecorder
+// NativeSpeechClient: browser built-in Web Speech API
 
-class FunASRClient {
-  constructor(url = 'ws://127.0.0.1:10095/') {
+class WhisperASRClient {
+  constructor(url = 'https://www.project-resonance.net/api/whisper-asr') {
     this.url = url;
-    this.ws = null;
-    this.audioContext = null;
     this.stream = null;
-    this.processor = null;
+    this.mediaRecorder = null;
     this.isRecording = false;
+    this.chunks = [];
 
-    // Callbacks
-    this.onResult = null; // (text, isFinal)
-    this.onError = null;
-    this.onConnect = null;
-    this.onDisconnect = null;
-
-    this.sampleRate = 16000;
+    this.onResult = null;   // (text: string, isFinal: boolean)
+    this.onError = null;    // (errorMessage: string)
+    this.onConnect = null;  // ()
+    this.onDisconnect = null; // ()
   }
 
   async start() {
     if (this.isRecording) return;
-
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      this._connectWebSocket();
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.chunks = [];
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+
+      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType });
+
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) this.chunks.push(e.data);
+      };
+
+      this.mediaRecorder.onstop = async () => {
+        if (this.chunks.length === 0) return;
+        const blob = new Blob(this.chunks, { type: mimeType });
+        const formData = new FormData();
+        formData.append('file', blob, 'recording.webm');
+
+        try {
+          const resp = await fetch(this.url, { method: 'POST', body: formData });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) {
+            if (this.onError) this.onError(`识别服务不可用 (${resp.status})`);
+            return;
+          }
+          if (data.ok === false) {
+            if (this.onError) this.onError(data.error || '未识别到语音内容');
+            return;
+          }
+          const text = (data.text || '').trim();
+          if (text) {
+            if (this.onResult) this.onResult(text, true);
+          } else {
+            if (this.onError) this.onError('未识别到语音内容');
+          }
+        } catch (err) {
+          console.error('Whisper ASR fetch error:', err);
+          if (this.onError) this.onError('网络错误，请检查网络连接');
+        } finally {
+          this._cleanup();
+          if (this.onDisconnect) this.onDisconnect();
+        }
+      };
+
+      this.mediaRecorder.start();
+      this.isRecording = true;
+      if (this.onConnect) this.onConnect();
     } catch (e) {
       console.error('Failed to get microphone', e);
       if (this.onError) this.onError('无法获取麦克风权限');
@@ -34,115 +74,24 @@ class FunASRClient {
   }
 
   stop() {
+    if (!this.isRecording) return;
     this.isRecording = false;
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      this.mediaRecorder.stop();
+    }
+    this._cleanup();
+  }
 
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // Send end chunk
-      this.ws.send(JSON.stringify({ is_speaking: false }));
-    }
-
-    if (this.processor) {
-      this.processor.disconnect();
-      this.processor = null;
-    }
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
+  _cleanup() {
     if (this.stream) {
       this.stream.getTracks().forEach(t => t.stop());
       this.stream = null;
     }
-  }
-
-  _connectWebSocket() {
-    this.ws = new WebSocket(this.url);
-    this.ws.binaryType = 'arraybuffer';
-
-    this.ws.onopen = () => {
-      console.log('FunASR websocket connected');
-      this.isRecording = true;
-      if (this.onConnect) this.onConnect();
-
-      // Start message for 2pass online/offline modes
-      const startMsg = {
-        mode: "2pass",
-        chunk_size: [5, 10, 5],
-        chunk_interval: 10,
-        wav_name: "mic",
-        is_speaking: true
-      };
-      this.ws.send(JSON.stringify(startMsg));
-
-      this._startAudioCapture();
-    };
-
-    this.ws.onmessage = (e) => {
-      try {
-        const res = JSON.parse(e.data);
-        // FunASR responses have `text` and `mode` (e.g. 2pass-online, 2pass-offline)
-        if (res.text) {
-          const isFinal = res.mode === '2pass-offline' || res.mode === 'offline';
-          if (this.onResult) {
-            this.onResult(res.text, isFinal);
-          }
-        }
-      } catch (err) {
-        console.error('WS parse error', err);
-      }
-    };
-
-    this.ws.onerror = (e) => {
-      console.error('FunASR websocket error', e);
-      if (this.onError) this.onError('语音识别服务连接失败');
-      this.stop();
-    };
-
-    this.ws.onclose = () => {
-      console.log('FunASR websocket closed');
-      if (this.onDisconnect) this.onDisconnect();
-      this.stop();
-    };
-  }
-
-  _startAudioCapture() {
-    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-      sampleRate: this.sampleRate
-    });
-
-    const source = this.audioContext.createMediaStreamSource(this.stream);
-
-    let bufferSize = 2048;
-    this.processor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
-
-    source.connect(this.processor);
-    this.processor.connect(this.audioContext.destination);
-
-    this.processor.onaudioprocess = (e) => {
-      if (!this.isRecording || this.ws.readyState !== WebSocket.OPEN) return;
-
-      const inputData = e.inputBuffer.getChannelData(0);
-
-      // FunASR expects 16-bit PCM at 16000Hz.
-      // We process Float32Array to Int16Array
-      const pcmData = new Int16Array(inputData.length);
-      for (let i = 0; i < inputData.length; i++) {
-        let s = Math.max(-1, Math.min(1, inputData[i]));
-        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
-
-      this.ws.send(pcmData.buffer);
-    };
+    this.mediaRecorder = null;
+    this.chunks = [];
   }
 }
 
-// Make it globally available
-window.FunASRClient = FunASRClient;
-
-/**
- * Native SpeechClient (Fallback)
- * Uses browser's built-in Web Speech API
- */
 class NativeSpeechClient {
   constructor() {
     this.isRecording = false;
@@ -166,7 +115,6 @@ class NativeSpeechClient {
       };
 
       this.recognition.onresult = (e) => {
-        // 取最后一个结果
         const last = e.results[e.results.length - 1];
         const text = last[0].transcript.trim();
         const isFinal = last.isFinal;
@@ -176,40 +124,21 @@ class NativeSpeechClient {
       this.recognition.onerror = (e) => {
         console.error('Speech recognition error:', e.error);
         let errorMsg = '语音识别失败';
-
         switch (e.error) {
-          case 'not-allowed':
-            errorMsg = '麦克风权限被拒绝，请在浏览器设置中允许麦克风访问';
-            break;
-          case 'no-speech':
-            errorMsg = '未检测到语音，请重试';
-            break;
-          case 'network':
-            errorMsg = '网络连接失败，请检查网络后重试';
-            break;
-          case 'service-not-allowed':
-            errorMsg = '语音识别服务不可用，请稍后重试';
-            break;
-          case 'aborted':
-            errorMsg = '语音识别被中断';
-            break;
-          case 'audio-capture':
-            errorMsg = '无法访问麦克风，请检查设备连接';
-            break;
-          case 'language-not-supported':
-            errorMsg = '不支持当前语言';
-            break;
-          default:
-            errorMsg = `语音识别失败 (${e.error})`;
+          case 'not-allowed': errorMsg = '麦克风权限被拒绝'; break;
+          case 'no-speech': errorMsg = '未检测到语音'; break;
+          case 'network': errorMsg = '网络连接失败'; break;
+          case 'aborted': errorMsg = '语音识别被中断'; break;
+          case 'audio-capture': errorMsg = '无法访问麦克风'; break;
+          default: errorMsg = `识别失败 (${e.error})`;
         }
-
         if (this.onError) this.onError(errorMsg);
         this.stop();
       };
 
       this.recognition.onend = () => {
+        // Don't call stop() here to avoid recursion
         if (this.onDisconnect) this.onDisconnect();
-        this.stop();
       };
     }
   }
@@ -223,17 +152,9 @@ class NativeSpeechClient {
     try {
       this.recognition.start();
     } catch (e) {
-      console.error(e);
-      // 如果是重复启动错误，先停止再重启
       if (e.name === 'InvalidStateError') {
         this.recognition.stop();
-        setTimeout(() => {
-          try {
-            this.recognition.start();
-          } catch (err) {
-            if (this.onError) this.onError('启动语音识别失败');
-          }
-        }, 100);
+        setTimeout(() => { try { this.recognition.start(); } catch (err) {} }, 100);
       } else {
         if (this.onError) this.onError('启动语音识别失败');
       }
@@ -243,13 +164,11 @@ class NativeSpeechClient {
   stop() {
     this.isRecording = false;
     if (this.recognition) {
-      try { this.recognition.stop(); } catch (e) { }
-    }
-    if (this.onDisconnect) {
-      // Need to defer since onend might trigger simultaneously
-      setTimeout(() => { if (this.onDisconnect) this.onDisconnect(); }, 0);
+      try { this.recognition.stop(); } catch (e) {}
     }
   }
 }
 
+// Expose globally so voice.js can use `new window.WhisperASRClient()`
+window.WhisperASRClient = WhisperASRClient;
 window.NativeSpeechClient = NativeSpeechClient;
