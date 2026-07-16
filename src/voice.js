@@ -95,14 +95,14 @@ export function createVoice(engine, ui, getASRMode) {
       state.tileTypes = sichuanRules.tileTypes;
 
       const action = await parseCommand(text, state);
-      dispatchAction(action);
+      dispatchAction(action, text);
     } catch (err) {
       console.warn('LLM parse failed, using keyword fallback:', err);
       handleKeywordFallback(text);
     }
   }
 
-  function dispatchAction(action) {
+  function dispatchAction(action, originalText) {
     switch (action.action) {
       case 'discard': {
         if (!action.tile) { ui.showToast('没听清要出哪张牌'); return; }
@@ -127,7 +127,12 @@ export function createVoice(engine, ui, getASRMode) {
         window.dispatchEvent(new CustomEvent('voice-action', { detail: { action: 'pass' } }));
         break;
       default:
-        ui.showToast('没听清，请再说一次');
+        // LLM 不认识 → 用关键词兜底再试一次
+        if (originalText) {
+          handleKeywordFallback(originalText);
+        } else {
+          ui.showToast('没听清，请再说一次');
+        }
     }
   }
 
