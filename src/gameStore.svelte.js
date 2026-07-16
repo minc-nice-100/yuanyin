@@ -261,13 +261,13 @@ export function getStore() {
       }
     },
     playerAction(action) {
+      hideActionPrompt();
       let result;
       switch (action) {
         case 'peng': result = engine.peng(0); break;
         case 'gang': result = engine.gang(0); break;
         case 'hu': result = engine.hu(0); break;
         case 'pass':
-          hideActionPrompt();
           result = engine.pass(0);
           break;
       }
