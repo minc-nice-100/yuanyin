@@ -59,7 +59,17 @@ class FunASRClient {
     this.ws = new WebSocket(this.url);
     this.ws.binaryType = 'arraybuffer';
 
+    // 连接超时：3 秒连不上就触发 fallback
+    const connectTimeout = setTimeout(() => {
+      if (this.ws.readyState !== WebSocket.OPEN) {
+        console.warn('FunASR websocket connect timeout');
+        this.ws.close();
+        if (this.onError) this.onError('语音识别服务连接失败');
+      }
+    }, 3000);
+
     this.ws.onopen = () => {
+      clearTimeout(connectTimeout);
       console.log('FunASR websocket connected');
       this.isRecording = true;
       if (this.onConnect) this.onConnect();
@@ -209,7 +219,7 @@ class NativeSpeechClient {
 
       this.recognition.onend = () => {
         if (this.onDisconnect) this.onDisconnect();
-        this.stop();
+        this.isRecording = false;
       };
     }
   }
@@ -243,11 +253,7 @@ class NativeSpeechClient {
   stop() {
     this.isRecording = false;
     if (this.recognition) {
-      try { this.recognition.stop(); } catch (e) { }
-    }
-    if (this.onDisconnect) {
-      // Need to defer since onend might trigger simultaneously
-      setTimeout(() => { if (this.onDisconnect) this.onDisconnect(); }, 0);
+      try { this.recognition.stop(); } catch (e) { /* already stopped */ }
     }
   }
 }

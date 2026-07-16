@@ -35,6 +35,6 @@ export const SFX = {
 // --- 快捷短语 ---
 export const QUICK_PHRASES = ['不急慢慢来', '快点出牌', '厉害！', '再想想', '运气好', '下把加油'];
 
-// --- LLM 语义出牌配置 ---
+// --- LLM 语义出牌配置（通过 URL 参数 ?llm= 指定）---
 const param = new URLSearchParams(window.location.search);
-export const LLM_WORKER_URL = param.get('llm') || 'https://your-worker.workers.dev';
+export const LLM_WORKER_URL = param.get('llm') || '';

@@ -18,7 +18,7 @@
       </div>
     </div>
     <h1 class="app-title">原音麻将</h1>
-    <p class="app-subtitle">— 康复训练 · 轻松有趣 —</p>
+    <p class="app-subtitle">语音出牌 · 康复训练 · 轻松有趣</p>
 
     <div class="feature-cards">
       <div class="feature-card">
@@ -27,7 +27,7 @@
         </div>
         <div class="feature-text">
           <h3>语音出牌</h3>
-          <p>说话即可控制碰、杠、胡、出牌</p>
+          <p>说话即可出牌，按住按钮说出牌名，这是核心玩法</p>
         </div>
       </div>
       <div class="feature-card">
@@ -35,8 +35,8 @@
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c8a96e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </div>
         <div class="feature-text">
-          <h3>三人 AI 对战</h3>
-          <p>与三位 AI 玩家对战，练习麻将技巧</p>
+          <h3>四人同玩</h3>
+          <p>小明、老王、小红，三个 AI 陪打，随时凑齐一桌</p>
         </div>
       </div>
       <div class="feature-card">
@@ -44,8 +44,8 @@
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#4A9D5B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         </div>
         <div class="feature-text">
-          <h3>康复训练</h3>
-          <p>适合语言康复训练，边玩边练</p>
+          <h3>康复追踪</h3>
+          <p>每次打牌的语音数据自动记录，家属和康复师能远程看到</p>
         </div>
       </div>
     </div>
@@ -53,6 +53,6 @@
     <button class="start-btn" onclick={onStart}>
       <span>开始游戏</span>
     </button>
-    <p class="footer-text">原音 · 康复训练</p>
+    <p class="footer-text">原音麻将 — 三缺一，来不来？</p>
   </div>
 </div>
